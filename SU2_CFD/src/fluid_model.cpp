@@ -2,18 +2,24 @@
  * fluid_model.cpp
  * \brief Source of the main thermo-physical subroutines of the SU2 solvers.
  * \author S.Vitale, M.Pini, G.Gori, A.Guardone, P.Colonna
- * \version 4.1.0 "Cardinal"
+ * \version 6.2.0 "Falcon"
  *
- * SU2 Lead Developers: Dr. Francisco Palacios (Francisco.D.Palacios@boeing.com).
- *                      Dr. Thomas D. Economon (economon@stanford.edu).
+ * The current SU2 release has been coordinated by the
+ * SU2 International Developers Society <www.su2devsociety.org>
+ * with selected contributions from the open-source community.
  *
- * SU2 Developers: Prof. Juan J. Alonso's group at Stanford University.
- *                 Prof. Piero Colonna's group at Delft University of Technology.
- *                 Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
- *                 Prof. Alberto Guardone's group at Polytechnic University of Milan.
- *                 Prof. Rafael Palacios' group at Imperial College London.
+ * The main research teams contributing to the current release are:
+ *  - Prof. Juan J. Alonso's group at Stanford University.
+ *  - Prof. Piero Colonna's group at Delft University of Technology.
+ *  - Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
+ *  - Prof. Alberto Guardone's group at Polytechnic University of Milan.
+ *  - Prof. Rafael Palacios' group at Imperial College London.
+ *  - Prof. Vincent Terrapon's group at the University of Liege.
+ *  - Prof. Edwin van der Weide's group at the University of Twente.
+ *  - Lab. of New Concepts in Aeronautics at Tech. Institute of Aeronautics.
  *
- * Copyright (C) 2012-2015 SU2, the open-source CFD code.
+ * Copyright 2012-2019, Francisco D. Palacios, Thomas D. Economon,
+ *                      Tim Albring, and the SU2 contributors.
  *
  * SU2 is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -31,55 +37,82 @@
 
 #include "../include/fluid_model.hpp"
 
-
 CFluidModel::CFluidModel(void) {
 
   /*--- Attributes initialization ---*/
 
-	StaticEnergy = 0.0;
-	Entropy = 0.0;
-	Density = 0.0;
-	Pressure = 0.0;
-	SoundSpeed2 = 0.0;
-	Temperature = 0.0;
-	dPdrho_e = 0.0;
-	dPde_rho = 0.0;
-	dTdrho_e = 0.0;
-	dTde_rho = 0.0;
-	Cp       = 0.0;
+  StaticEnergy = 0.0;
+  Entropy = 0.0;
+  Density = 0.0;
+  Pressure = 0.0;
+  SoundSpeed2 = 0.0;
+  Temperature = 0.0;
+  dPdrho_e = 0.0;
+  dPde_rho = 0.0;
+  dTdrho_e = 0.0;
+  dTde_rho = 0.0;
+  Cp       = 0.0;
+  Cv       = 0.0;
+  Mu       = 0.0;
+  Mu_Turb  = 0.0;
 
-	LaminarViscosity = NULL;
-	ThermalConductivity = NULL;
+  LaminarViscosity = NULL;
+  ThermalConductivity = NULL;
 
 }
 
 CFluidModel::~CFluidModel(void) {
-
-  }
+  if (LaminarViscosity!= NULL) delete LaminarViscosity;
+  if (ThermalConductivity!= NULL) delete ThermalConductivity;
+}
 
 void CFluidModel::SetLaminarViscosityModel (CConfig *config) {
   
-	switch (config->GetKind_ViscosityModel()) {
-	case CONSTANT_VISCOSITY:
-		LaminarViscosity = new CConstantViscosity(config->GetMu_ConstantND());
-		break;
-	case SUTHERLAND:
-		LaminarViscosity = new CSutherland(config->GetMu_RefND(), config->GetMu_Temperature_RefND(), config->GetMu_SND());
-		break;
-	}
+  switch (config->GetKind_ViscosityModel()) {
+    case CONSTANT_VISCOSITY:
+      LaminarViscosity = new CConstantViscosity(config->GetMu_ConstantND());
+      break;
+    case SUTHERLAND:
+      LaminarViscosity = new CSutherland(config->GetMu_RefND(), config->GetMu_Temperature_RefND(), config->GetMu_SND());
+      break;
+    case POLYNOMIAL_VISCOSITY:
+      LaminarViscosity = new CPolynomialViscosity(config->GetnPolyCoeffs(), config->GetMu_PolyCoeffND());
+      break;
+    default:
+      SU2_MPI::Error("Viscosity model not available.", CURRENT_FUNCTION);
+      break;
+  }
   
 }
 
 void CFluidModel::SetThermalConductivityModel (CConfig *config) {
   
-	switch (config->GetKind_ConductivityModel()) {
-	case CONSTANT_CONDUCTIVITY:
-		ThermalConductivity = new CConstantConductivity(config->GetKt_ConstantND());
-		break;
-	case CONSTANT_PRANDTL:
-		ThermalConductivity = new CConstantPrandtl(config->GetPrandtl_Lam());
-		break;
-	}
+  switch (config->GetKind_ConductivityModel()) {
+    case CONSTANT_CONDUCTIVITY:
+      if (config->GetKind_ConductivityModel_Turb() == CONSTANT_PRANDTL_TURB) {
+        ThermalConductivity = new CConstantConductivityRANS(config->GetKt_ConstantND(), config->GetPrandtl_Turb());
+      } else {
+        ThermalConductivity = new CConstantConductivity(config->GetKt_ConstantND());
+      }
+      break;
+    case CONSTANT_PRANDTL:
+      if (config->GetKind_ConductivityModel_Turb() == CONSTANT_PRANDTL_TURB) {
+        ThermalConductivity = new CConstantPrandtlRANS(config->GetPrandtl_Lam(), config->GetPrandtl_Turb());
+      } else {
+        ThermalConductivity = new CConstantPrandtl(config->GetPrandtl_Lam());
+      }
+      break;
+    case POLYNOMIAL_CONDUCTIVITY:
+      if (config->GetKind_ConductivityModel_Turb() == CONSTANT_PRANDTL_TURB) {
+        ThermalConductivity = new CPolynomialConductivityRANS(config->GetnPolyCoeffs(), config->GetKt_PolyCoeffND(), config->GetPrandtl_Turb());
+      } else {
+        ThermalConductivity = new CPolynomialConductivity(config->GetnPolyCoeffs(), config->GetKt_PolyCoeffND());
+      }
+      break;
+    default:
+      SU2_MPI::Error("Conductivity model not available.", CURRENT_FUNCTION);
+      break;
+  }
   
 }
 

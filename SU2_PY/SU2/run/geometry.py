@@ -3,18 +3,24 @@
 ## \file geometry.py
 #  \brief python package for running geometry analyses
 #  \author T. Lukaczyk, F. Palacios
-#  \version 4.1.0 "Cardinal"
+#  \version 6.2.0 "Falcon"
 #
-# SU2 Lead Developers: Dr. Francisco Palacios (Francisco.D.Palacios@boeing.com).
-#                      Dr. Thomas D. Economon (economon@stanford.edu).
+# The current SU2 release has been coordinated by the
+# SU2 International Developers Society <www.su2devsociety.org>
+# with selected contributions from the open-source community.
 #
-# SU2 Developers: Prof. Juan J. Alonso's group at Stanford University.
-#                 Prof. Piero Colonna's group at Delft University of Technology.
-#                 Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
-#                 Prof. Alberto Guardone's group at Polytechnic University of Milan.
-#                 Prof. Rafael Palacios' group at Imperial College London.
+# The main research teams contributing to the current release are:
+#  - Prof. Juan J. Alonso's group at Stanford University.
+#  - Prof. Piero Colonna's group at Delft University of Technology.
+#  - Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
+#  - Prof. Alberto Guardone's group at Polytechnic University of Milan.
+#  - Prof. Rafael Palacios' group at Imperial College London.
+#  - Prof. Vincent Terrapon's group at the University of Liege.
+#  - Prof. Edwin van der Weide's group at the University of Twente.
+#  - Lab. of New Concepts in Aeronautics at Tech. Institute of Aeronautics.
 #
-# Copyright (C) 2012-2015 SU2, the open-source CFD code.
+# Copyright 2012-2019, Francisco D. Palacios, Thomas D. Economon,
+#                      Tim Albring, and the SU2 contributors.
 #
 # SU2 is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,10 +39,10 @@
 #  Imports
 # ----------------------------------------------------------------------
 
-import os, sys, shutil, copy
+import copy
 
 from .. import io  as su2io
-from interface import GEO       as SU2_GEO
+from .interface import GEO       as SU2_GEO
 from ..util import ordered_bunch
 
 # ----------------------------------------------------------------------
@@ -73,9 +79,11 @@ def geometry ( config , step = 1e-3 ):
     
     # unpack
     function_name = konfig['GEO_PARAM']
-    func_filename = 'of_func.dat'
-    grad_filename = 'of_grad.dat'
-    
+
+    func_filename  = konfig['VALUE_OBJFUNC_FILENAME']
+
+    grad_filename  = konfig['GRAD_OBJFUNC_FILENAME']
+
     # choose dv values 
     Definition_DV = konfig['DEFINITION_DV']
     n_DV          = len(Definition_DV['KIND'])

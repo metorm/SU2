@@ -3,18 +3,24 @@
  * \brief Headers of the main subroutines for doing the complete dual grid structure.
  *        The subroutines and functions are in the <i>dual_grid_structure.cpp</i> file.
  * \author F. Palacios, T. Economon
- * \version 4.1.0 "Cardinal"
+ * \version 6.2.0 "Falcon"
  *
- * SU2 Lead Developers: Dr. Francisco Palacios (Francisco.D.Palacios@boeing.com).
- *                      Dr. Thomas D. Economon (economon@stanford.edu).
+ * The current SU2 release has been coordinated by the
+ * SU2 International Developers Society <www.su2devsociety.org>
+ * with selected contributions from the open-source community.
  *
- * SU2 Developers: Prof. Juan J. Alonso's group at Stanford University.
- *                 Prof. Piero Colonna's group at Delft University of Technology.
- *                 Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
- *                 Prof. Alberto Guardone's group at Polytechnic University of Milan.
- *                 Prof. Rafael Palacios' group at Imperial College London.
+ * The main research teams contributing to the current release are:
+ *  - Prof. Juan J. Alonso's group at Stanford University.
+ *  - Prof. Piero Colonna's group at Delft University of Technology.
+ *  - Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
+ *  - Prof. Alberto Guardone's group at Polytechnic University of Milan.
+ *  - Prof. Rafael Palacios' group at Imperial College London.
+ *  - Prof. Vincent Terrapon's group at the University of Liege.
+ *  - Prof. Edwin van der Weide's group at the University of Twente.
+ *  - Lab. of New Concepts in Aeronautics at Tech. Institute of Aeronautics.
  *
- * Copyright (C) 2012-2015 SU2, the open-source CFD code.
+ * Copyright 2012-2019, Francisco D. Palacios, Thomas D. Economon,
+ *                      Tim Albring, and the SU2 contributors.
  *
  * SU2 is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -48,7 +54,6 @@ using namespace std;
  * \brief Class for controlling the dual volume definition. The dual volume is compose by 
  *        three main elements: points, edges, and vertices.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CDualGrid{
 protected:
@@ -65,7 +70,7 @@ public:
 	/*! 
 	 * \brief Destructor of the class. 
 	 */
-	~CDualGrid(void);
+	virtual ~CDualGrid(void);
 	
 	/*! 
 	 * \brief A pure virtual member.
@@ -133,7 +138,6 @@ public:
  * \class CPoint
  * \brief Class for point definition (including control volume definition).
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CPoint : public CDualGrid {
 private:
@@ -169,6 +173,7 @@ private:
   unsigned long GlobalIndex;          /*!< \brief Global index in the parallel simulation. */
   unsigned short nNeighbor;           /*!< \brief Number of neighbors. */
   bool Flip_Orientation;              /*!< \brief Flip the orientation of the normal. */
+  su2double MaxLength;                /*!< \brief The maximum cell-center to cell-center length. */
 
 public:
 	
@@ -398,6 +403,12 @@ public:
 	 */
 	su2double GetVolume(void);
 	
+	/*!
+	 * \brief Get the maximum cell-center to cell-center length.
+	 * \return The maximum cell-center to cell-center length.
+	 */
+	su2double GetMaxLength(void);
+
 	/*! 
 	 * \brief Get information about the movement of the node.
 	 * \return <code>TRUE</code> if the point is going to be moved; otherwise <code>FALSE</code>.
@@ -538,6 +549,18 @@ public:
 	 * \brief Set the coordinates of the control volume at time n-1.
 	 */
 	void SetCoord_n1(void);
+
+	/*!
+	 * \brief Set the coordinates of the control volume at time n, for restart cases.
+	 * \param[in] val_coord - Value of the grid coordinates at time n.
+	 */
+	void SetCoord_n(su2double *val_coord);
+
+	/*!
+	 * \brief Set the coordinates of the control volume at time n-1, for restart cases.
+	 * \param[in] val_coord - Value of the grid coordinates at time n-1.
+	 */
+	void SetCoord_n1(su2double *val_coord);
   
 	/*! 
 	 * \brief Set the coordinates of the control volume at time n+1.
@@ -550,7 +573,13 @@ public:
 	 * \param[in] val_Volume - Value of the volume.
 	 */
 	void SetVolume(su2double val_Volume);
-	
+
+  /*!
+   * \brief Set the max cell-center to cell-center length.
+   * \param[in] val_max_length - Value of the max length
+   */
+  void SetMaxLength(su2double val_max_length);
+
 	/*! 
 	 * \brief Set if a element is going to be moved on the deformation process.
 	 * \param[in] val_move - true or false depending if the point will be moved.
@@ -637,18 +666,18 @@ public:
 	 */
 	su2double **GetGridVel_Grad(void);
 	
-	/*! 
+	/*!
 	 * \brief Add the value of the coordinates to the <i>Coord_Sum</i> vector for implicit smoothing.
 	 * \param[in] val_coord_sum - Value of the coordinates to add.
 	 */	
 	void AddCoord_Sum(su2double *val_coord_sum);
 	
-	/*! 
+	/*!
 	 * \brief Initialize the vector <i>Coord_Sum</i>.
 	 */	
 	void SetCoord_SumZero(void);
 	
-	/*! 
+	/*!
 	 * \brief Set the value of the vector <i>Coord_Old</i> for implicit smoothing.
 	 * \param[in] val_coord_old - Value of the coordinates.
 	 */	
@@ -722,13 +751,25 @@ public:
 	 *        definition of the function in all the derived classes).
 	 */
 	void AddNormal(su2double *val_face_normal);
+
+  /*!
+   * \brief Set the adjoint values of the coordinates.
+   * \param[in] adj_sol - The adjoint values of the coordinates.
+   */
+  void SetAdjointCoord(su2double *adj_coor);
+
+  /*!
+   * \brief Get the adjoint values of the coordinates.
+   * \param[in] adj_sol - The adjoint values of the coordinates.
+   */
+  void GetAdjointCoord(su2double *adj_coor);
+
 };
 
 /*! 
  * \class CEdge
  * \brief Class for defining an edge.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CEdge : public CDualGrid {
 private:
@@ -865,20 +906,26 @@ public:
  * \class CVertex
  * \brief Class for vertex definition (equivalent to edges, but for the boundaries).
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CVertex : public CDualGrid {
-private:
+protected:
 	unsigned long *Nodes;	/*!< \brief Vector to store the global nodes of an element. */
 	su2double *Normal;			/*!< \brief Normal coordinates of the element and its center of gravity. */
 	su2double Aux_Var;			/*!< \brief Auxiliar variable defined only on the surface. */
 	su2double CartCoord[3];		/*!< \brief Vertex cartesians coordinates. */
 	su2double VarCoord[3];		/*!< \brief Used for storing the coordinate variation due to a surface modification. */
-	long PeriodicPoint[2];			/*!< \brief Store the periodic point of a boundary (iProcessor, iPoint) */
+	su2double *VarRot;   /*!< \brief Used for storing the rotation variation due to a surface modification. */
+	long PeriodicPoint[5];			/*!< \brief Store the periodic point of a boundary (iProcessor, iPoint) */
+  bool ActDisk_Perimeter;     /*!< \brief Identify nodes at the perimeter of the actuator disk */
 	short Rotation_Type;			/*!< \brief Type of rotation associated with the vertex (MPI and periodic) */
 	unsigned long Normal_Neighbor; /*!< \brief Index of the closest neighbor. */
+	unsigned long *Donor_Points; /*!< \brief indices of donor points for interpolation across zones */
+	unsigned long *Donor_Proc; /*!< \brief indices of donor processor for interpolation across zones in parallel */
   unsigned long Donor_Elem;   /*!< \brief Store the donor element for interpolation across zones/ */
+  unsigned short Donor_Face;  /*!<\brief Store the donor face (w/in donor element) for interpolation across zones */
   su2double Basis_Function[3]; /*!< \brief Basis function values for interpolation across zones. */
+  su2double *Donor_Coeff; /*!\brief Store a list of coefficients corresponding to the donor points. */
+  unsigned short nDonor_Points; /*!\brief Number of points in Donor_Points; at least there will be one donor point (if the mesh is matching)*/
   
 public:
 
@@ -1027,12 +1074,58 @@ public:
 	 */
 	void SetDonorPoint(long val_periodicpoint, long val_processor);
 	
+  /*!
+   * \overload
+   * \param[in] val_periodicpoint - Value of periodic point of the vertex.
+   * \param[in] val_processor - Processor where the point belong.
+   */
+  void SetDonorPoint(long val_periodicpoint, long val_periodicglobalindex, long val_periodicvertex, long val_periodicmarker, long val_processor);
+  
 	/*! 
+	 * \overload
+	 * \param[in] val_periodicpoint - Value of periodic point of the vertex.
+	 * \param[in] val_processor - Processor where the point belong.
+	 * \param[in] val_globalindex - Global index of the donor point.
+	 */
+	void SetDonorPoint(long val_periodicpoint, long val_processor, long val_globalindex);
+  
+  /*!
+   * \overload
+   * \param[in] val_periodicpoint - Value of periodic point of the vertex.
+   * \param[in] val_processor - Processor where the point belong.
+   */
+  void SetActDisk_Perimeter(bool val_actdisk_perimeter);
+
+	/*!
 	 * \brief Get the value of the periodic point of a vertex.
 	 * \return Value of the periodic point of a vertex.
 	 */
 	long GetDonorPoint(void);
   
+  /*!
+   * \brief Get the value of the periodic point of a vertex.
+   * \return Value of the periodic point of a vertex.
+   */
+  long GetDonorMarker(void);
+  
+  /*!
+   * \brief Get the value of the periodic point of a vertex.
+   * \return Value of the periodic point of a vertex.
+   */
+  long GetDonorVertex(void);
+
+  /*!
+   * \brief Get the value of the periodic point of a vertex.
+   * \return Value of the periodic point of a vertex.
+   */
+  long GetDonorGlobalIndex(void);
+  
+  /*!
+   * \brief Get the value of the periodic point of a vertex.
+   * \return Value of the periodic point of a vertex.
+   */
+  long GetGlobalDonorPoint(void);
+
   /*!
 	 * \brief Get the value of the periodic point of a vertex.
 	 * \return Value of the periodic point of a vertex.
@@ -1046,6 +1139,12 @@ public:
 	long *GetPeriodicPointDomain(void);	
   
   /*!
+   * \brief Get the value of the periodic point of a vertex, and its somain
+   * \return Value of the periodic point of a vertex, and the domain.
+   */
+  bool GetActDisk_Perimeter(void);
+
+  /*!
 	 * \brief Set the donor element of a vertex for interpolation across zones.
 	 * \param[in] val_donorelem - donor element index.
 	 */
@@ -1056,6 +1155,18 @@ public:
 	 * \return Value of the donor element of a vertex.
 	 */
 	long GetDonorElem(void);
+
+	/*!
+   * \brief Set the donor face of a vertex for interpolation across zones.
+   * \param[in] val_donorface- donor face index (w/in donor elem).
+   */
+  void SetDonorFace(unsigned short val_donorface);
+
+  /*!
+   * \brief Get the donor face of a vertex for interpolation across zones.
+   * \return Value of the donor face index (w/in donor elem).
+   */
+  unsigned short GetDonorFace(void);
   
   /*!
 	 * \brief Set the finite element basis functions needed for interpolation.
@@ -1083,6 +1194,194 @@ public:
 	 */
 	unsigned long GetNormal_Neighbor(void);
 	
+	/*!
+   * \brief Increment the number of donor points by 1.
+   */
+	void IncrementnDonor(void);
+
+	/*!
+   * \brief Set the value of nDonor_Points
+   * \param[in] nDonor - the number of donor points
+   */
+	void SetnDonorPoints(unsigned short nDonor);
+
+	/*!
+   * \brief Return the value of nDonor_Points
+   * \return nDonor - the number of donor points
+   */
+	unsigned short GetnDonorPoints(void);
+
+	/*!
+   * \brief Set the coefficient value of a donor point.
+   * \param[in] iDonor - Index of the donor point.
+   * \param[in] val  - Value of the coefficent for point iDonor.
+   */
+	void SetDonorCoeff(unsigned short iDonor, su2double val);
+
+	/*!
+   * \brief Get the coefficient value of a donor point.
+   * \param[in] iDonor - Index of the donor point.
+   * \return  - Value of the coefficent for point iDonor.
+   */
+	su2double GetDonorCoeff(unsigned short iDonor);
+
+  /*!
+   * \brief Set the donor point of a vertex for interpolation across zones.
+   * \param[in] val_donorpoint- donor face index (w/in donor elem).
+   */
+  void SetInterpDonorPoint(unsigned short val_donorindex, long val_donorpoint);
+
+  /*!
+   * \brief Get the value of the donor point of a vertex (for interpolation).
+   * \return Value of the donor point of a vertex.
+   */
+  long GetInterpDonorPoint(unsigned short val_donorpoint);
+
+
+  /*!
+   * \brief Set the donor point of a vertex for interpolation across zones.
+   * \param[in] val_donorpoint- donor face index (w/in donor elem).
+   */
+  void SetInterpDonorProcessor(unsigned short val_donorindex, long val_rank);
+
+  /*!
+   * \brief Get the value of the donor point of a vertex (for interpolation).
+   * \return Value of the donor point of a vertex.
+   */
+  long GetInterpDonorProcessor(unsigned short val_donorindex);
+
+
+	/*!
+   * \brief Allocate memory based on how many donor points need to be stored.
+   * Uses nDonor_Points
+   */
+	void	Allocate_DonorInfo(void);
+
+	/*!
+   * \brief Get the rotation variation
+   * \return  - pointer to the vector defining the rotation
+   */
+  su2double *GetVarRot(void);
+
+  /*!
+   * \brief Set the rotation variation
+   * \return  - pointer to the vector defining the rotation
+   */
+  void SetVarRot(su2double* val);
+
+};
+
+/*!
+ * \class CTurboVertex
+ * \brief Class for vertex definition for turbomachinery (equivalent to edges, but for the boundaries).
+ * \author S. Vitale
+ */
+class CTurboVertex : public CVertex {
+private:
+  su2double *TurboNormal;			/*!< \brief Normal for computing correct turbomachinery quantities. */
+  su2double Area;							/*!< \brief Value of the face area associated to the vertex */
+  //	su2double PitchCoord;       /*!< \brief Value of the abscissa pitch wise */
+  su2double AngularCoord;     /*!< \brief Value of the angular coordinate  */
+  su2double DeltaAngularCoord;     /*!< \brief Value of the angular coordinate w.r.t. the minimum pitch point  */
+  su2double RelAngularCoord; /*!< \brief Value of the angular coordinate w.r.t. the minimum pitch point  */
+
+  unsigned long OldVertex;    /*!< \brief Value of the vertex numeration before the ordering */
+  int GlobalIndex;						/*!< \brief Value of the vertex numeration after the ordering and global with respect to MPI partinioning */
+
+public:
+
+  /*!
+   * \brief Constructor of the class.
+   * \param[in] val_point - Node of the vertex.
+   * \param[in] val_nDim - Number of dimensions of the problem.
+   */
+  CTurboVertex(unsigned long val_point, unsigned short val_nDim);
+
+  /*!
+   * \brief Destructor of the class.
+   */
+  ~CTurboVertex(void);
+
+  /*!
+   * \brief set Normal in the turbomachinery frame of reference.
+   * \param[in] val_normal - normal vector.
+   */
+  void SetTurboNormal(su2double *val_normal);
+
+  /*!
+   * \brief set face Area.
+   * \param[in] val_area - value of the face area.
+   */
+  void SetArea(su2double val_area);
+
+  /*!
+   * \brief get face Area associate to the vertex.
+   */
+  su2double GetArea(void);
+
+  /*!
+   * \brief Copy the the turbo normal vector of a face.
+   * \param[in] val_normal - Vector where the subroutine is goint to copy the normal (dimensionaless).
+   */
+  void GetTurboNormal(su2double *val_normal);
+
+  /*!
+   * \brief Get the turbo normal to a face where turboperformance are computed .
+   * \return Dimensionaless normal vector, the modulus is the area of the face.
+   */
+  su2double *GetTurboNormal(void);
+
+  /*!
+   * \brief set vertex value not ordered.
+   * \param[in] val_vertex - value of the vertex before ordering.
+   */
+  void SetOldVertex(unsigned long val_vertex);
+
+  /*!
+   * \brief retrieve vertex value not ordered.
+   */
+  unsigned long GetOldVertex(void);
+
+  /*!
+   * \brief set global index for ordered span-wise turbovertex.
+   */
+  void SetGlobalVertexIndex(int globalindex);
+
+  /*!
+   * \brief get global index for ordered span-wise turbovertex.
+   */
+  int GetGlobalVertexIndex(void);
+
+  /*!
+   * \brief set angular coord.
+   */
+  void SetAngularCoord(su2double angCoord);
+
+  /*!
+   * \brief get angular coord.
+   */
+  su2double GetAngularCoord(void);
+
+  /*!
+   * \brief set angular coord.
+   */
+  void SetDeltaAngularCoord(su2double deltaAngCoord);
+
+  /*!
+   * \brief get angular coord.
+   */
+  su2double GetDeltaAngularCoord(void);
+
+  /*!
+   * \brief set angular coord.
+   */
+  void SetRelAngularCoord(su2double minAngCoord);
+
+  /*!
+   * \brief get angular coord.
+   */
+  su2double GetRelAngularCoord(void);
+
 };
 
 #include "dual_grid_structure.inl"

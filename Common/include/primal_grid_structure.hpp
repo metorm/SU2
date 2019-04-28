@@ -3,18 +3,24 @@
  * \brief Headers of the main subroutines for storing the primal grid structure.
  *        The subroutines and functions are in the <i>primal_grid_structure.cpp</i> file.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
+ * \version 6.2.0 "Falcon"
  *
- * SU2 Lead Developers: Dr. Francisco Palacios (Francisco.D.Palacios@boeing.com).
- *                      Dr. Thomas D. Economon (economon@stanford.edu).
+ * The current SU2 release has been coordinated by the
+ * SU2 International Developers Society <www.su2devsociety.org>
+ * with selected contributions from the open-source community.
  *
- * SU2 Developers: Prof. Juan J. Alonso's group at Stanford University.
- *                 Prof. Piero Colonna's group at Delft University of Technology.
- *                 Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
- *                 Prof. Alberto Guardone's group at Polytechnic University of Milan.
- *                 Prof. Rafael Palacios' group at Imperial College London.
+ * The main research teams contributing to the current release are:
+ *  - Prof. Juan J. Alonso's group at Stanford University.
+ *  - Prof. Piero Colonna's group at Delft University of Technology.
+ *  - Prof. Nicolas R. Gauger's group at Kaiserslautern University of Technology.
+ *  - Prof. Alberto Guardone's group at Polytechnic University of Milan.
+ *  - Prof. Rafael Palacios' group at Imperial College London.
+ *  - Prof. Vincent Terrapon's group at the University of Liege.
+ *  - Prof. Edwin van der Weide's group at the University of Twente.
+ *  - Lab. of New Concepts in Aeronautics at Tech. Institute of Aeronautics.
  *
- * Copyright (C) 2012-2015 SU2, the open-source CFD code.
+ * Copyright 2012-2019, Francisco D. Palacios, Thomas D. Economon,
+ *                      Tim Albring, and the SU2 contributors.
  *
  * SU2 is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -46,13 +52,15 @@ using namespace std;
 /*!
  * \class CPrimalGrid
  * \brief Class to define the numerical primal grid.
- * \author F. Palacios
- * \version 4.1.0 "Cardinal"
+ * \author F. Palacios, T. Economon
  */
 class CPrimalGrid {
 protected:
 	unsigned long *Nodes;         /*!< \brief Vector to store the global nodes of an element. */
+  unsigned long GlobalIndex;    /*!< \brief The global index of an element. */
 	long *Neighbor_Elements;      /*!< \brief Vector to store the elements surronding an element. */
+ short *PeriodIndexNeighbors;  /*!< \brief Vector to store the periodic index of a neighbor.
+                                           A -1 indicates no periodic transformation to the neighbor. */
 	su2double *Coord_CG;             /*!< \brief Coordinates of the center-of-gravity of the element. */
 	su2double **Coord_FaceElems_CG;	/*!< \brief Coordinates of the center-of-gravity of the face of the
                                  elements. */
@@ -62,7 +70,12 @@ protected:
                                  correspond with a boundary element is stored. */
 	bool Divide;                  /*!< \brief Marker used to know if we are going to divide this element
                                  in the adaptation proccess. */
-  
+  su2double Volume;    /*!< \brief Volume of the element. */
+  bool *JacobianFaceIsConstant; /*!< \brief Whether or not the Jacobian of the faces can be considered
+                                            constant in the transformation to the standard element. */
+  bool *ElementOwnsFace;    /*!< \brief Whether or not the element owns the face. */
+  su2double LenScale;       /*!< \brief Length scale of the element. */
+  unsigned short TimeLevel; /*!< \brief Time level of the element for time accurate local time stepping. */
 public:
 	
 	/*!
@@ -82,20 +95,88 @@ public:
 	 * \brief Destructor of the class.
 	 */
 	virtual ~CPrimalGrid(void);
-	
-	/*!
-	 * \brief Get the elements that surround an element.
-	 * \param[in] val_face - Local index of the face.
-	 * \return Global index of the element.
-	 */
-	long GetNeighbor_Elements(unsigned short val_face);
-	
-	/*!
-	 * \brief Set the elements that surround an element.
-	 * \param[in] val_elem - Global index of the element.
-	 * \param[in] val_face - Local index of the face.
-	 */
-	void SetNeighbor_Elements(unsigned long val_elem, unsigned short val_face);
+
+  /*!
+   * \brief Get the elements that surround an element.
+   * \param[in] val_face - Local index of the face.
+   * \return Global index of the element.
+   */
+  long GetNeighbor_Elements(unsigned short val_face);
+
+  /*!
+   * \brief Set the elements that surround an element.
+   * \param[in] val_elem - Global index of the element.
+   * \param[in] val_face - Local index of the face.
+   */
+  void SetNeighbor_Elements(unsigned long val_elem, unsigned short val_face);
+
+  /*!
+   * \brief Make available the length scale of the element.
+   * \return The length scale of the element.
+   */
+  su2double GetLengthScale(void);
+
+  /*!
+   * \brief Set the length scale of the element.
+   * \param[in] val_lenScale - Length scale of the element.
+   */
+  void SetLengthScale(su2double val_lenScale);
+
+  /*!
+   * \brief Make available the time level of the element.
+   * \return The time level of the element.
+   */
+  unsigned short GetTimeLevel(void);
+
+  /*!
+   * \brief Set the time level of the element.
+   * \param[in] val_timeLevel - Time level of the element.
+   */
+  void SetTimeLevel(unsigned short val_timeLevel);
+
+ /*!
+  * \brief Get the boolean to indicate whether or not this element owns the face
+           between the current and the adjacent element with index val_face.
+  * \param[in] val_face - Local index of the face.
+  * \return   Boolean to indicate whether or not the face is owned by this element.
+  */
+ bool GetOwnerFace(unsigned short val_face);
+
+ /*!
+  * \brief Set the boolean to indicate whether or not this element owns the face
+           between the current and the adjacent element with index val_face.
+  * \param[in] val_owner - Whether or not this element owns the face.
+  * \param[in] val_face  - Local index of the face.
+  */
+ void SetOwnerFace(bool val_owner, unsigned short val_face);
+
+ /*!
+  * \brief Get the index of the periodic transformation to the neighboring element.
+  * \param[in] val_face - Local index of the face.
+  * \return   Index of the periodic transformation to the neighboring element.
+  */
+ short GetPeriodicIndex(unsigned short val_face);
+
+ /*!
+  * \brief Set the index of the periodic transformation to the neighboring element.
+  * \param[in] val_periodic - Index of the periodic marker to which the face belongs.
+  * \param[in] val_face     - Local index of the face.
+  */
+ void SetPeriodicIndex(unsigned short val_periodic, unsigned short val_face);
+
+ /*!
+  * \brief Get whether or not the Jacobian of the given face is considered constant.
+  * \param[in] val_face - Local index of the face.
+  * \return  Whether or not the Jacobian of the face is considered constant.
+  */
+ bool GetJacobianConstantFace(unsigned short val_face);
+
+ /*!
+  * \brief Set whether or not the Jacobian of the given face is considered constant.
+  * \param[in] val_JacFaceIsConstant - Boolean to indicate whether or not the Jacobian is constant.
+  * \param[in] val_face              - Local index of the face.
+  */
+ void SetJacobianConstantFace(bool val_JacFaceIsConstant, unsigned short val_face);
 	
 	/*!
 	 * \brief Set the center of gravity of an element (including edges).
@@ -109,7 +190,20 @@ public:
 	 * \return Coordinates of the center of gravity.
 	 */
 	su2double GetCG(unsigned short val_dim);
-	
+		
+  /*!
+   * \brief Set the center of gravity of an element (including edges).
+   * \param[in] val_coord - Coordinates of the element.
+   */
+  void SetVolume(su2double val_volume);
+  
+  /*!
+   * \brief Get the center of gravity of an element (including edges).
+   * \param[in] val_dim - Coordinate of the center of gravity.
+   * \return Coordinates of the center of gravity.
+   */
+  su2double GetVolume(void);
+
 	/*!
 	 * \brief Get the CG of a face of an element.
 	 * \param[in] val_face - Local index of the face.
@@ -135,6 +229,42 @@ public:
 	 * \return <code>TRUE</code> if the element must be divided; otherwise <code>FALSE</code>.
 	 */
 	bool GetDivide(void);
+
+ /*!
+  * \brief Initialize the array, which stores whether or not the faces have a constant Jacobian.
+  * \param[in] val_nFaces - Number of faces for which Jacobians must be initialized.
+  */
+ void InitializeJacobianConstantFaces(unsigned short val_nFaces);
+
+ /*!
+  * \brief Initialize the information about the neighboring elements.
+  * \param[in] val_nFaces - Number of faces for which neighboring information must be initialized.
+  */
+ void InitializeNeighbors(unsigned short val_nFaces);
+
+ /*!
+  * \brief A virtual member.
+  * \param[in] val_color - New color of the element.
+  */
+ virtual void SetColor(unsigned long val_color);
+
+ /*!
+  * \brief A virtual member.
+  * \return The color of the element in the partitioning.
+  */
+ virtual unsigned long GetColor(void);
+  
+  /*!
+   * \brief Get the element global index in a parallel computation.
+   * \return Global index of the element in a parallel computation.
+   */
+  unsigned long GetGlobalIndex(void);
+  
+  /*!
+   * \brief Set the global index for an element in a parallel computation.
+   * \return Global index of an element in a parallel computation.
+   */
+  void SetGlobalIndex(unsigned long val_globalindex);
 	
 	/*!
 	 * \brief A virtual member.
@@ -216,7 +346,6 @@ public:
 	 */
 	virtual unsigned long GetNode(unsigned short val_node) = 0;
   
-  
   /*!
 	 * \brief A pure virtual member.
 	 * \param[in] val_node - Local index of a node.
@@ -240,6 +369,100 @@ public:
 	 * \return Local index of the nodes that are neighbor to <i>val_node</i>.
 	 */
 	virtual unsigned short GetNeighbor_Nodes(unsigned short val_node, unsigned short val_index) = 0;
+
+ /*!
+  * \brief Virtual function, that must be overwritten by the derived class, if needed.
+  * \param[out] nFaces         - Number of faces of this element.
+  * \param[out] nPointsPerFace - Number of corner points for each of the faces.
+  * \param[out] faceConn       - Global IDs of the corner points of the faces.
+  */
+ virtual void GetCornerPointsAllFaces(unsigned short &nFaces,
+                                      unsigned short nPointsPerFace[],
+                                      unsigned long  faceConn[6][4]);
+
+ /*!
+  * \brief Virtual function to make available the global ID of this element.
+  * \return The global ID of this element.
+  */
+  virtual unsigned long GetGlobalElemID(void);
+
+ /*!
+  * \brief Virtual function to make available the global offset of the solution DOFs.
+  * \return The global offset of the solution DOFs.
+  */
+ virtual unsigned long GetGlobalOffsetDOFsSol(void);
+
+ /*!
+  * \brief Virtual function to make available the polynomial degree of the grid.
+  * \return The polynomial degree of the grid.
+  */
+ virtual unsigned short GetNPolyGrid(void);
+
+ /*!
+  * \brief Virtual function to make available the polynomial degree of the solution.
+  * \return The polynomial degree of the solution.
+  */
+ virtual unsigned short GetNPolySol(void);
+
+ /*!
+  * \brief Virtual function to make available the number of DOFs of the grid in the element.
+  * \return The number of DOFs of the Grid in the element.
+  */
+ virtual unsigned short GetNDOFsGrid(void);
+
+ /*!
+  * \brief Virtual function to make available the number of DOFs of the solution in the element.
+  * \return The number of DOFs of the solution in the element.
+  */
+ virtual unsigned short GetNDOFsSol(void);
+
+ /*!
+  * \brief Virtual function to get whether or not the Jacobian is considered constant.
+  * \return True if the Jacobian is (almost) constant and false otherwise.
+  */
+ virtual bool GetJacobianConsideredConstant(void);
+
+ /*!
+  * \brief Virtual function to set the value of JacobianConsideredConstant.
+  * \param[in] val_JacobianConsideredConstant - The value to be set for JacobianConsideredConstant.
+  */
+ virtual void SetJacobianConsideredConstant(bool val_JacobianConsideredConstant);
+
+ /*!
+  * \brief Virtual function to correct the offset of the global DOFs.
+  * \param[in] val_offsetRank - The offset that must be added for this rank.
+  */
+ virtual void AddOffsetGlobalDOFs(const unsigned long val_offsetRank);
+
+ /*!
+  * \brief Virtual function to add the given donor ID to the donor elements for the wall function treatment.
+  * \param[in] donorElement - Element to be added to donor elements.
+  */
+ virtual void AddDonorWallFunctions(const unsigned long donorElement);
+
+ /*!
+  * \brief Virtual function to make available the number of donor elements for the wall function treatment.
+  * \return The number of donor elements.
+  */
+ virtual unsigned short GetNDonorsWallFunctions(void);
+
+ /*!
+  * \brief Virtual function to make available the pointer to the vector for the donor elements
+           for the wall function treatment.
+  * \return The pointer to the data of donorElementsWallFunctions.
+  */
+ virtual unsigned long *GetDonorsWallFunctions(void);
+
+ /*!
+  * \brief Virtual function to set the global ID's of the donor elements for the wall function treatment.
+  * \param[in] donorElements - Vector, which contain the donor elements.
+  */
+ virtual void SetDonorsWallFunctions(const vector<unsigned long> &donorElements);
+
+ /*!
+  * \brief Virtual function to remove the multiple donors for the wall function treatment.
+  */
+ virtual void RemoveMultipleDonorsWallFunctions(void);
 };
 
 /*!
@@ -247,7 +470,6 @@ public:
  * \brief Class for vertex element definition. This kind
  *        of element is used in the parallelization stuff.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CVertexMPI : public CPrimalGrid {
 private:
@@ -255,7 +477,7 @@ private:
 	static unsigned short nNodes;				/*!< \brief Number of nodes of the element. */
 	static unsigned short VTK_Type;				/*!< \brief Type of element using VTK nomenclature. */
 	unsigned short Rotation_Type;			/*!< \brief Definition of the rotation, traslation of the
-																		 solution at the vertex. */
+                                                                    solution at the vertex. */
 	static unsigned short maxNodesFace;			/*!< \brief Maximum number of nodes for a face. */
 	static unsigned short nNeighbor_Elements;	/*!< \brief Number of Neighbor_Elements. */
 	
@@ -364,7 +586,6 @@ public:
  * \class CLine
  * \brief Class for line element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CLine : public CPrimalGrid {
 private:
@@ -490,7 +711,6 @@ public:
  * \class CTriangle
  * \brief Class for triangle element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CTriangle : public CPrimalGrid {
 private:
@@ -618,7 +838,6 @@ public:
  * \class CQuadrilateral
  * \brief Class for quadrilateral element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CQuadrilateral : public CPrimalGrid {
 private:
@@ -746,7 +965,6 @@ public:
  * \class CTetrahedron
  * \brief Class for tetrahedron element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CTetrahedron : public CPrimalGrid {
 private:
@@ -861,7 +1079,6 @@ public:
  * \class CHexahedron
  * \brief Class for hexahedron element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CHexahedron : public CPrimalGrid {
 private:
@@ -983,7 +1200,6 @@ public:
  * \class CPrism
  * \brief Class for prism element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CPrism : public CPrimalGrid {
 private:
@@ -1101,7 +1317,6 @@ public:
  * \class CPyramid
  * \brief Class for pyramid element definition.
  * \author F. Palacios
- * \version 4.1.0 "Cardinal"
  */
 class CPyramid : public CPrimalGrid {
 private:
@@ -1212,6 +1427,442 @@ public:
 	 * \brief Change the orientation of an element.
 	 */
 	void Change_Orientation(void);
+};
+
+/*!
+ * \class CPrimalGridFEM
+ * \brief Class to define primal grid element for the FEM solver.
+ * \version 6.2.0 "Falcon"
+ */
+class CPrimalGridFEM : public CPrimalGrid {
+private:
+ unsigned short VTK_Type;      /*!< \brief Element type using the VTK convention. */
+ unsigned short nPolyGrid;     /*!< \brief Polynomial degree for the geometry of the element. */
+ unsigned short nPolySol;      /*!< \brief Polynomial degree for the solution of the element. */
+ unsigned short nDOFsGrid;     /*!< \brief Number of DOFs for the geometry of the element. */
+ unsigned short nDOFsSol;      /*!< \brief Number of DOFs for the solution of the element. */
+ unsigned short nFaces;        /*!< \brief Number of faces of the element. */
+
+ unsigned long elemIDGlobal;        /*!< \brief Global element ID of this element. */
+ unsigned long offsetDOFsSolGlobal; /*!< \brief Global offset of the solution DOFs of this element. */
+ unsigned long color;               /*!< \brief Color of the element in the partitioning strategy. */
+
+ bool JacobianConsideredConstant; /*!< \brief Whether or not the Jacobian of the transformation to
+                                              is (almost) constant. */
+
+public:
+
+ /*!
+  * \brief Constructor of the class.
+  */
+ CPrimalGridFEM(void);
+
+ /*!
+  * \brief Constructor using data to initialize the element.
+  * \param[in] val_elemGlobalID - Global element ID of this element.
+  * \param[in] val_VTK_Type     - VTK type to indicate the element type
+  * \param[in] val_nPolyGrid    - Polynomial degree to describe the geometry of the element.
+  * \param[in] val_nPolySol     - Polynomial degree to describe the solution of the element.
+  * \param[in] val_nDOFsGrid    - Number of DOFs used to describe the geometry of the element.
+  * \param[in] val_nDOFsSol     - Number of DOFs used to describe the solution of the element.
+  * \param[in] val_offDOfsSol   - Global offset of the solution DOFs of the element.
+  * \param[in] elem_line        - istringstream, which contains the grid node numbers of the element.
+  */
+ CPrimalGridFEM(unsigned long  val_elemGlobalID, unsigned short val_VTK_Type,
+                unsigned short val_nPolyGrid,    unsigned short val_nPolySol,
+                unsigned short val_nDOFsGrid,    unsigned short val_nDOFsSol,
+                unsigned long  val_offDOfsSol,   istringstream  &elem_line);
+
+ /*!
+  * \brief Constructor using data to initialize the element.
+  * \param[in] val_elemGlobalID - Global element ID of this element.
+  * \param[in] val_VTK_Type     - VTK type to indicate the element type
+  * \param[in] val_nPolyGrid    - Polynomial degree to describe the geometry of the element.
+  * \param[in] val_nPolySol     - Polynomial degree to describe the solution of the element.
+  * \param[in] val_nDOFsGrid    - Number of DOFs used to describe the geometry of the element.
+  * \param[in] val_nDOFsSol     - Number of DOFs used to describe the solution of the element.
+  * \param[in] val_offDOfsSol   - Global offset of the solution DOFs of the element.
+  * \param[in] connGrid         - Array, which contains the grid node numbers of the element.
+  */
+ CPrimalGridFEM(unsigned long  val_elemGlobalID, unsigned short val_VTK_Type,
+                unsigned short val_nPolyGrid,    unsigned short val_nPolySol,
+                unsigned short val_nDOFsGrid,    unsigned short val_nDOFsSol,
+                unsigned long  val_offDOfsSol,   const unsigned long *connGrid);
+
+ /*!
+  * \brief Destructor of the class.
+  */
+ ~CPrimalGridFEM(void);
+
+ /*!
+  * \brief Get the node shared by the element
+  * \param[in] val_node - Local (to the element) index of the node.
+  * \return Global index of the node.
+  */
+ unsigned long GetNode(unsigned short val_node);
+
+ /*!
+  * \brief Get the number of nodes that composes a face of an element.
+  * \param[in] val_face - Local index of the face.
+  * \return Number of nodes that composes a face of an element.
+  */
+ unsigned short GetnNodesFace(unsigned short val_face);
+
+ /*!
+  * \brief Get the face index of an element.
+  * \param[in] val_face - Local index of the face.
+  * \param[in] val_index - Local (to the face) index of the nodes that compose the face.
+  * \return Local (to the element) index of the nodes that compose the face.
+  */
+ unsigned short GetFaces(unsigned short val_face, unsigned short val_index);
+
+ /*!
+  * \brief Get the local index of the neighbors to a node (given the local index).
+  * \param[in] val_node - Local (to the element) index of a node.
+  * \param[in] val_index - Local (to the neighbor nodes of val_node) index of the nodes that are neighbor to val_node.
+  * \return Local (to the element) index of the nodes that are neighbor to val_node.
+  */
+ unsigned short GetNeighbor_Nodes(unsigned short val_node, unsigned short val_index);
+
+ /*!
+  * \brief Get the number of nodes of an element.
+  * \return Number of nodes that composes an element.
+  */
+ unsigned short GetnNodes(void);
+
+ /*!
+  * \brief Get the number of faces of an element.
+  * \return Number of faces of an element.
+  */
+ unsigned short GetnFaces(void);
+
+ /*!
+  * \brief Get the number of neighbors nodes of a node.
+  * \param[in] val_node - Local (to the element) index of a node.
+  * \return Number if neighbors of a node val_node.
+  */
+ unsigned short GetnNeighbor_Nodes(unsigned short val_node);
+
+ /*!
+  * \brief Change the orientation of an element.
+  */
+ void Change_Orientation(void);
+
+ /*!
+  * \brief Make available the global ID of this element.
+  * \return The global ID of this element.
+  */
+ unsigned long GetGlobalElemID(void);
+
+ /*!
+  * \brief Make available the global offset of the solution DOFs of this element.
+  * \return The global offset of the solution DOFs.
+  */
+ unsigned long GetGlobalOffsetDOFsSol(void);
+
+ /*!
+  * \brief Get the number of element that are neighbor to this element.
+  * \return Number of neighbor elements.
+  */
+ unsigned short GetnNeighbor_Elements(void);
+
+ /*!
+  * \brief Get the Maximum number of nodes of a face of an element.
+  * \return Maximum number of nodes of a face of an element.
+  */
+ unsigned short GetMaxNodesFace(void);
+
+ /*!
+  * \brief Get the type of the element using VTK nomenclature.
+  * \return Type of the element using VTK nomenclature.
+  */
+ unsigned short GetVTK_Type(void);
+
+ /*!
+  * \brief Get the polynomial degree of the grid for this element.
+  * \return The polynomial degree of the grid.
+  */
+ unsigned short GetNPolyGrid(void);
+
+ /*!
+  * \brief Get the polynomial degree of the solution for this element.
+  * \return The polynomial degree of the solution.
+  */
+ unsigned short GetNPolySol(void);
+
+  /*!
+  * \brief Function to make available the number of DOFs of the grid in the element.
+  * \return The number of DOFs of the grid in the element.
+  */
+ unsigned short GetNDOFsGrid(void);
+
+  /*!
+  * \brief Function to make available the number of DOFs of the solution in the element.
+  * \return The number of DOFs of the solution in the element.
+  */
+ unsigned short GetNDOFsSol(void);
+
+ /*!
+  * \brief Get all the corner points of all the faces of this element. It must be made sure
+           that the numbering of the faces is identical to the numbering used for the
+           standard elements.
+  * \param[out] nFaces         - Number of faces of this element.
+  * \param[out] nPointsPerFace - Number of corner points for each of the faces.
+  * \param[out] faceConn       - Global IDs of the corner points of the faces.
+  */
+ void GetCornerPointsAllFaces(unsigned short &numFaces,
+                              unsigned short nPointsPerFace[],
+                              unsigned long  faceConn[6][4]);
+
+ /*!
+  * \brief Static member function to get the local the corner points of all the faces
+           of this element. It must be made sure that the numbering of the faces is
+           identical to the numbering used for the standard elements.
+  * \param[in]  elementType    - Type of the element using the VTK convention.
+  * \param[in]  nPoly          - Polynomial degree of the element.
+  * \param[in]  nDOFs          - Number of DOFs of the element.
+  * \param[out] nFaces         - Number of faces of this element.
+  * \param[out] nPointsPerFace - Number of corner points for each of the faces.
+  * \param[out] faceConn       - Global IDs of the corner points of the faces.
+  */
+ static void GetLocalCornerPointsAllFaces(unsigned short elementType,
+                                          unsigned short nPoly,
+                                          unsigned short nDOFs,
+                                          unsigned short &numFaces,
+                                          unsigned short nPointsPerFace[],
+                                          unsigned long  faceConn[6][4]);
+ /*!
+  * \brief Function to get whether or not the Jacobian is considered constant.
+  * \return True if the Jacobian is (almost) constant and false otherwise.
+  */
+ bool GetJacobianConsideredConstant(void);
+
+ /*!
+  * \brief Set the color of the element.
+  * \param[in] val_color - New color of the element.
+  */
+ void SetColor(unsigned long val_color);
+
+ /*!
+  * \brief Get the color of the element for the partitioning.
+  * return - The color of the element in the partitioning.
+  */
+ unsigned long GetColor(void);
+
+ /*!
+  * \brief Function to set the value of JacobianConsideredConstant.
+  * \param[in] val_JacobianConsideredConstant - The value to be set for JacobianConsideredConstant.
+  */
+ void SetJacobianConsideredConstant(bool val_JacobianConsideredConstant);
+
+ /*!
+  * \brief Function to correct the offset of the global DOFs.
+  * \param[in] val_offsetRank - The offset that must be added for this rank.
+  */
+ void AddOffsetGlobalDOFs(const unsigned long val_offsetRank);
+};
+
+/*!
+ * \class CPrimalGridBoundFEM
+ * \brief Class to define primal grid boundary element for the FEM solver.
+ * \version 6.2.0 "Falcon"
+ */
+class CPrimalGridBoundFEM : public CPrimalGrid {
+private:
+ unsigned short VTK_Type;     /*!< \brief Element type using the VTK convention. */
+ unsigned short nPolyGrid;    /*!< \brief Polynomial degree for the geometry of the element. */
+ unsigned short nDOFsGrid;    /*!< \brief Number of DOFs for the geometry of the element. */
+
+ unsigned long boundElemIDGlobal;    /*!< \brief Global boundary element ID of this element. */
+ bool JacobianConsideredConstant;    /*!< \brief Whether or not the Jacobian of the transformation to
+                                                 is (almost) constant. */
+
+ vector<unsigned long> donorElementsWallFunctions; /*!< \brief The global ID's of the donor elements
+                                                               for the wall function treatment. */
+public:
+
+ /*!
+  * \brief Constructor of the class.
+  */
+ CPrimalGridBoundFEM(void);
+
+/*!
+  * \brief Constructor using data to initialize the boundary element.
+  * \param[in] val_elemGlobalID    - Global boundary element ID of this element.
+  * \param[in] val_domainElementID - Global ID of the corresponding domain element.
+  * \param[in] val_VTK_Type        - VTK type to indicate the element type
+  * \param[in] val_nPolyGrid       - Polynomial degree to describe the geometry of the element.
+  * \param[in] val_nDOFsGrid       - Number of DOFs used to describe the geometry of the element.
+  * \param[in] val_nodes           - Vector, which contains the global node IDs of the element.
+  */
+ CPrimalGridBoundFEM(unsigned long         val_elemGlobalID,
+                     unsigned long         val_domainElementID,
+                     unsigned short        val_VTK_Type,
+                     unsigned short        val_nPolyGrid,
+                     unsigned short        val_nDOFsGrid,
+                     vector<unsigned long> &val_nodes);
+
+ /*!
+  * \brief Destructor of the class.
+  */
+ ~CPrimalGridBoundFEM(void);
+
+ /*!
+  * \brief Get the node shared by the element
+  * \param[in] val_node - Local (to the element) index of the node.
+  * \return Global index of the node.
+  */
+ unsigned long GetNode(unsigned short val_node);
+
+ /*!
+  * \brief Get the number of nodes that composes a face of an element.
+  * \param[in] val_face - Local index of the face.
+  * \return Number of nodes that composes a face of an element.
+  */
+ unsigned short GetnNodesFace(unsigned short val_face);
+
+ /*!
+  * \brief Get the face index of an element.
+  * \param[in] val_face - Local index of the face.
+  * \param[in] val_index - Local (to the face) index of the nodes that compose the face.
+  * \return Local (to the element) index of the nodes that compose the face.
+  */
+ unsigned short GetFaces(unsigned short val_face, unsigned short val_index);
+
+ /*!
+  * \brief Get the local index of the neighbors to a node (given the local index).
+  * \param[in] val_node - Local (to the element) index of a node.
+  * \param[in] val_index - Local (to the neighbor nodes of val_node) index of the nodes that are neighbor to val_node.
+  * \return Local (to the element) index of the nodes that are neighbor to val_node.
+  */
+ unsigned short GetNeighbor_Nodes(unsigned short val_node, unsigned short val_index);
+
+ /*!
+  * \brief Get the number of nodes of an element.
+  * \return Number of nodes that composes an element.
+  */
+ unsigned short GetnNodes(void);
+
+ /*!
+  * \brief Get the number of faces of an element.
+  * \return Number of faces of an element.
+  */
+ unsigned short GetnFaces(void);
+
+ /*!
+  * \brief Get the number of neighbors nodes of a node.
+  * \param[in] val_node - Local (to the element) index of a node.
+  * \return Number if neighbors of a node val_node.
+  */
+ unsigned short GetnNeighbor_Nodes(unsigned short val_node);
+
+  /*!
+  * \brief Change the orientation of an element.
+  */
+ void Change_Orientation(void);
+
+ /*!
+  * \brief Get the number of element that are neighbor to this element.
+  * \return Number of neighbor elements.
+  */
+ unsigned short GetnNeighbor_Elements(void);
+
+ /*!
+  * \brief Get the Maximum number of nodes of a face of an element.
+  * \return Maximum number of nodes of a face of an element.
+  */
+ unsigned short GetMaxNodesFace(void);
+
+ /*!
+  * \brief Get the type of the element using VTK nomenclature.
+  * \return Type of the element using VTK nomenclature.
+  */
+ unsigned short GetVTK_Type(void);
+
+ /*!
+  * \brief Get the polynomial degree of the grid for this element.
+  * \return The polynomial degree of the grid.
+  */
+ unsigned short GetNPolyGrid(void);
+
+ /*!
+  * \brief Function to make available the number of DOFs of the grid in the element.
+  * \return The number of DOFs of the grid in the element.
+  */
+ unsigned short GetNDOFsGrid(void);
+
+ /*!
+  * \brief Get the corner points of this boundary element.
+  * \param[out] nFaces         - Number of faces of this element, i.e. 1.
+  * \param[out] nPointsPerFace - Number of corner points for each of the faces.
+  * \param[out] faceConn       - Global IDs of the corner points of the faces.
+  */
+ void GetCornerPointsAllFaces(unsigned short &nFaces,
+                              unsigned short nPointsPerFace[],
+                              unsigned long  faceConn[6][4]);
+
+ /*!
+  * \brief Static member function to get the local the corner points of all the face
+           of this element.
+  * \param[in]  elementType    - Type of the element using the VTK convention.
+  * \param[in]  nPoly          - Polynomial degree of the element.
+  * \param[in]  nDOFs          - Number of DOFs of the element.
+  * \param[out] nPointsPerFace - Number of corner points of the face.
+  * \param[out] faceConn       - Global IDs of the corner points of the face.
+  */
+  static void GetLocalCornerPointsFace(unsigned short elementType,
+                                       unsigned short nPoly,
+                                       unsigned short nDOFs,
+                                       unsigned short &nPointsPerFace,
+                                       unsigned long  faceConn[]);
+
+ /*!
+  * \brief Make available the global ID of this element.
+  * \return The global ID of this element.
+  */
+ unsigned long GetGlobalElemID(void);
+
+ /*!
+  * \brief Function to get whether or not the Jacobian is considered constant.
+  * \return True if the Jacobian is (almost) constant and false otherwise.
+  */
+ bool GetJacobianConsideredConstant(void);
+
+ /*!
+  * \brief Function to set the value of JacobianConsideredConstant.
+  * \param[in] val_JacobianConsideredConstant - The value to be set for JacobianConsideredConstant.
+  */
+ void SetJacobianConsideredConstant(bool val_JacobianConsideredConstant);
+
+ /*!
+  * \brief Add the given donor ID to the donor elements for the wall function treatment.
+  * \param[in] donorElement - Element to be added to donor elements.
+  */
+ void AddDonorWallFunctions(const unsigned long donorElement);
+
+ /*!
+  * \brief Make available the number of donor elements for the wall function treatment.
+  * \return The number of donor elements.
+  */
+ unsigned short GetNDonorsWallFunctions(void);
+
+ /*!
+  * \brief Make available the pointer to the vector for the donor elements
+           for the wall function treatment.
+  * \return The pointer to the data of donorElementsWallFunctions.
+  */
+ unsigned long *GetDonorsWallFunctions(void); 
+
+ /*!
+  * \brief Set the global ID's of the donor elements for the wall function treatment.
+  * \param[in] donorElements - Vector, which contain the donor elements.
+  */
+ void SetDonorsWallFunctions(const vector<unsigned long> &donorElements);
+
+ /*!
+  * \brief Function to remove the multiple donors for the wall function treatment.
+  */
+ void RemoveMultipleDonorsWallFunctions(void);
 };
 
 #include "primal_grid_structure.inl"
